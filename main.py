@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pandas as pd
+from rapidfuzz import fuzz, process
+import logging
 from fastapi.responses import JSONResponse
 from sicetac_helper import SICETACHelper
 from modelo_sicetac import calcular_modelo_sicetac_extendido
@@ -58,25 +60,24 @@ def convertir_nativos(d):
 
 @app.post("/consulta")
 def calcular_sicetac(data: ConsultaInput):
+    data.origen = data.origen.strip().upper()
+    data.destino = data.destino.strip().upper()
+    data.mes = int(data.mes)
+    data.carroceria = data.carroceria.strip().upper()
     origen_info = helper.buscar_municipio(data.origen)
     destino_info = helper.buscar_municipio(data.destino)
 
-    if not origen_info or not destino_info:
-        raise HTTPException(status_code=404, detail="Origen o destino no encontrado")
+    #if not origen_info or not destino_info:
+    #    raise HTTPException(status_code=404, detail="Origen o destino no encontrado")
 
-    cod_origen = origen_info["codigo_dane"]
-    cod_destino = destino_info["codigo_dane"]
+    cod_origen = int(origen_info["codigo_dane"])
+    cod_destino = int(destino_info["codigo_dane"])
 
     # Buscar ruta en la base
     ruta = df_rutas[
         (df_rutas["codigo_dane_origen"] == cod_origen) &
         (df_rutas["codigo_dane_destino"] == cod_destino)
     ]
-    if ruta.empty:
-        ruta = df_rutas[
-            (df_rutas["codigo_dane_origen"] == cod_destino) &
-            (df_rutas["codigo_dane_destino"] == cod_origen)
-        ]
 
     if ruta.empty:
         if any([data.km_plano, data.km_ondulado, data.km_montañoso, data.km_urbano, data.km_despavimentado]):
@@ -99,29 +100,29 @@ def calcular_sicetac(data: ConsultaInput):
             'KM_URBANO': fila_ruta.get("KM_URBANO", 0),
             'KM_DESPAVIMENTADO': fila_ruta.get("KM_DESPAVIMENTADO", 0),
         }
+    # encontrar el vehiculo que mas se parece
+    codigo_auto, score, idx = process.extractOne(data.vehiculo.strip().upper(),df_vehiculos["TIPO_VEHICULO"])
 
-    vehiculo_upper = data.vehiculo.strip().upper().replace("C", "")
-    vehiculos_validos = df_vehiculos["TIPO_VEHICULO"].astype(str).str.upper().str.replace("C", "").unique()
+    if score < 80:
+        logging.info(f"Vehículo '{data.vehiculo}' no encontrado. Se toma el tipo {codigo_auto} para el cáculo. Vehículos válidos: {df_vehiculos['TIPO_VEHICULO'].unique().tolist()}")
 
-    if vehiculo_upper not in vehiculos_validos:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Vehículo '{data.vehiculo}' no encontrado. Opciones válidas: {', '.join(vehiculos_validos)}"
-        )
+    meses_validos = df_parametros['MES'].unique().tolist()
+    if data.mes not in meses_validos:
+        codigo_mes = int(df_parametros["MES"].max())  # Tomar el mes más reciente si no se encuentra
+        logging.info(f"Mes '{data.mes}' no encontrado. Se toma el mes {df_parametros["MES"].max()} para el cáculo. Meses válidos: {meses_validos}")
+    else:
+        codigo_mes = data.mes
+        
+    codigo_carroceria, score, idx = process.extractOne(data.carroceria.strip().upper(),df_costos_fijos['TIPO_CARROCERIA'],scorer=fuzz.partial_ratio)
 
-    meses_validos = df_parametros["MES"].unique().tolist()
-    if int(data.mes) not in meses_validos:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mes '{data.mes}' no válido. Debe ser uno de: {meses_validos}"
-        )
-
+    if score < 80:
+        logging.info(f"Carrocería '{data.carroceria}' no encontrada. Se toma la carrocería {codigo_carroceria} para el cáculo. Carrocerías válidas: {df_costos_fijos['TIPO_CARROCERIA'].unique().tolist()}")
     # Calcular SICETAC
     resultado = calcular_modelo_sicetac_extendido(
         origen=data.origen,
         destino=data.destino,
-        configuracion=data.vehiculo,
-        serie=int(data.mes),
+        configuracion=codigo_auto,
+        serie=codigo_mes,
         distancias=distancias,
         valor_peaje_manual=data.valor_peaje_manual,
         matriz_parametros=df_parametros,
@@ -129,7 +130,7 @@ def calcular_sicetac(data: ConsultaInput):
         matriz_vehicular=df_vehiculos,
         rutas_df=df_rutas,
         peajes_df=df_peajes,
-        carroceria_especial=data.carroceria,
+        carroceria_especial=codigo_carroceria,
         ruta_oficial=fila_ruta,
         horas_logisticas=data.horas_logisticas
     )
@@ -139,13 +140,13 @@ def calcular_sicetac(data: ConsultaInput):
     # Compilar respuesta
     respuesta = {
         "SICETAC": resultado_convertido,
-        "HISTORICO_VALOR_MERCADO": obtener_valores_promedio_mercado(cod_origen, cod_destino, vehiculo_upper),
-        "INDICADORES_ORIGEN": obtener_indicadores(cod_origen, vehiculo_upper),
-        "INDICADORES_DESTINO": obtener_indicadores(cod_destino, vehiculo_upper),
-        "COMPETITIVIDAD": evaluar_competitividad(cod_origen, cod_destino, vehiculo_upper),
-        "MESES_MERCADO_DISPONIBLES": obtener_meses_disponibles_mercado(cod_origen, cod_destino, vehiculo_upper),
-        "MESES_INDICADORES_ORIGEN": obtener_meses_disponibles_indicador(df_indicadores, cod_origen, vehiculo_upper),
-        "MESES_INDICADORES_DESTINO": obtener_meses_disponibles_indicador(df_indicadores, cod_destino, vehiculo_upper)
+        "HISTORICO_VALOR_MERCADO": obtener_valores_promedio_mercado(cod_origen, cod_destino, codigo_auto),
+        "INDICADORES_ORIGEN": obtener_indicadores(cod_origen, codigo_auto),
+        "INDICADORES_DESTINO": obtener_indicadores(cod_destino, codigo_auto),
+        "COMPETITIVIDAD": evaluar_competitividad(cod_origen, cod_destino, codigo_auto),
+        "MESES_MERCADO_DISPONIBLES": obtener_meses_disponibles_mercado(cod_origen, cod_destino, codigo_auto),
+        "MESES_INDICADORES_ORIGEN": obtener_meses_disponibles_indicador(df_indicadores, cod_origen, codigo_auto),
+        "MESES_INDICADORES_DESTINO": obtener_meses_disponibles_indicador(df_indicadores, cod_destino, codigo_auto)
     }
 
     return JSONResponse(content=respuesta)

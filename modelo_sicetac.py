@@ -27,11 +27,11 @@ def calcular_modelo_sicetac_extendido(
     detalle = {}
 
     mapeo_columnas = {
-        'plano': distancias.get('KM_PLANO', 0),
-        'ondulado': distancias.get('KM_ONDULADO', 0),
-        'montaña': distancias.get('KM_MONTAÑOSO', 0),
-        'urbano': distancias.get('KM_URBANO', 0),
-        'despavimentado': distancias.get('KM_DESPAVIMENTADO', 0)
+        'plano': distancias['KM_PLANO'],
+        'ondulado': distancias['KM_ONDULADO'],
+        'montaña': distancias['KM_MONTAÑOSO'],
+        'urbano': distancias['KM_URBANO'],
+        'despavimentado': distancias['KM_DESPAVIMENTADO']
     }
 
     for tipo, km in mapeo_columnas.items():
@@ -49,11 +49,11 @@ def calcular_modelo_sicetac_extendido(
     recorridos = max(1, round(288 / horas_totales, 4))
 
     # --- 5. Costo fijo por carrocería ---
-    tipo_carroceria_objetivo = carroceria_especial.upper().strip() if carroceria_especial else "GENERAL"
+    tipo_carroceria_objetivo = carroceria_especial if carroceria_especial else "GENERAL"
     costo_fijo_match = matriz_costos_fijos[
         (matriz_costos_fijos["TIPO_VEHICULO"] == configuracion) &
         (matriz_costos_fijos["MES"] == serie) &
-        (matriz_costos_fijos["TIPO_CARROCERIA"].str.upper().str.strip() == tipo_carroceria_objetivo)
+        (matriz_costos_fijos["TIPO_CARROCERIA"] == tipo_carroceria_objetivo)
     ]
     if not costo_fijo_match.empty:
         costo_fijo_mes = costo_fijo_match["COSTO FIJO"].values[0]

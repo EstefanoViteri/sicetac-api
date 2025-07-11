@@ -10,9 +10,9 @@ def obtener_valores_promedio_mercado(origen, destino, configuracion):
     config = configuracion.upper()
     
     df_filtrado = df_valores[
-        (df_valores["CODIGO_ORIGEN"] == int(origen)) &
-        (df_valores["CODIGO_DESTINO"] == int(destino)) &
-        (df_valores["CONFIGURACION_ANALISIS"].str.upper() == config)
+        (df_valores["CODIGO_ORIGEN"] == origen) &
+        (df_valores["CODIGO_DESTINO"] == destino) &
+        (df_valores["CONFIGURACION_ANALISIS"].str.upper() == config.replace('C', ''))
     ]
 
     if df_filtrado.empty:
@@ -24,11 +24,11 @@ def obtener_valores_promedio_mercado(origen, destino, configuracion):
 
 # --- 2. INDICADORES OPERATIVOS POR MUNICIPIO OBJETIVO ---
 def obtener_indicadores(municipio_dane, configuracion):
-    config = configuracion.upper()
+    config = configuracion
 
     df_filtro = df_tiempos[
         (df_tiempos["CODIGO_OBJETIVO"] == int(municipio_dane)) &
-        (df_tiempos["CONFIGURACION"].str.upper() == config)
+        (df_tiempos["CONFIGURACION"].str.upper() == config.replace('C', ''))
     ]
 
     if df_filtro.empty:
@@ -50,11 +50,11 @@ def obtener_indicadores(municipio_dane, configuracion):
 
 # --- 3. COMPETITIVIDAD POR RUTA + CONFIGURACIÓN ---
 def evaluar_competitividad(origen, destino, configuracion):
-    config = configuracion.upper()
+    config = configuracion
     fila = df_competitividad[
-        (df_competitividad["CODIGO_ORIGEN"] == int(origen)) &
-        (df_competitividad["CODIGO_DESTINO"] == int(destino)) &
-        (df_competitividad["CONFIGURACION"].str.upper() == config)
+        (df_competitividad["CODIGO_ORIGEN"] == origen) &
+        (df_competitividad["CODIGO_DESTINO"] == destino) &
+        (df_competitividad["CONFIGURACION"].str.upper() == config.replace('C', ''))
     ]
     if fila.empty:
         return None
@@ -63,18 +63,18 @@ def evaluar_competitividad(origen, destino, configuracion):
 # --- 4. MESES DISPONIBLES PARA MERCADO ---
 def obtener_meses_disponibles_mercado(cod_origen, cod_destino, config):
     filtro = (
-        (df_valores["CODIGO_ORIGEN"] == int(cod_origen)) &
-        (df_valores["CODIGO_DESTINO"] == int(cod_destino)) &
-        (df_valores["CONFIGURACION_ANALISIS"].str.upper() == config.upper())
+        (df_valores["CODIGO_ORIGEN"] == cod_origen) &
+        (df_valores["CODIGO_DESTINO"] == cod_destino) &
+        (df_valores["CONFIGURACION_ANALISIS"].str.upper() == config.replace('C', ''))
     )
     meses = df_valores.loc[filtro, "MES"].dropna().unique()
     return sorted([int(m) for m in meses])
 
 # --- 5. MESES DISPONIBLES PARA INDICADORES OPERATIVOS ---
-def obtener_meses_disponibles_indicador(df, codigo_objetivo, configuracion):
+def obtener_meses_disponibles_indicador(df, codigo_objetivo, config):
     filtro = (
-        (df["CODIGO_OBJETIVO"] == int(codigo_objetivo)) &
-        (df["CONFIGURACION"].str.upper() == configuracion.upper())
+        (df["CODIGO_OBJETIVO"] == codigo_objetivo) &
+        (df["CONFIGURACION"].str.upper() == config.replace('C', ''))
     )
     meses = df.loc[filtro, "AÑOMES"].dropna().unique()
     return sorted([int(m) for m in meses])
