@@ -71,7 +71,10 @@ curl -X POST http://localhost:8000/consulta \
         "mes": 202504
       }'
 ```
-
+## Ejemplo para archivo json
+```bash
+curl -X POST http://localhost:8000/consulta -H "Content-Type: application/json" -d @ejemplo.json
+```
 ---
 
 ## 📦 Requisitos de entorno

@@ -3,6 +3,12 @@ mapeo_columnas_actualizado = {'plano': {'velocidad': 'PLANO VELOCIDAD PROMEDIO  
 
 
 import pandas as pd
+import logging
+from rapidfuzz import fuzz, process
+
+def limpiar_valor_monetario(valor_str):
+    # Elimina $ y comas, y convierte a float
+    return float(valor_str.replace("$", "").replace(",", ""))
 
 def calcular_modelo_sicetac_extendido(
     origen, destino, configuracion, serie, distancias,
@@ -50,16 +56,18 @@ def calcular_modelo_sicetac_extendido(
 
     # --- 5. Costo fijo por carrocería ---
     tipo_carroceria_objetivo = carroceria_especial if carroceria_especial else "GENERAL"
+    matriz_costos_fijos['Concatenado'] = matriz_costos_fijos['TIPO_VEHICULO'] + "-" + matriz_costos_fijos['MES'].astype(str) + "-" + matriz_costos_fijos['TIPO_CARROCERIA']
+    indice = configuracion + "-" + str(serie) + "-" + tipo_carroceria_objetivo
+    codigo_indice, score, idx = process.extractOne(indice.strip().upper(),matriz_costos_fijos['Concatenado'])
     costo_fijo_match = matriz_costos_fijos[
-        (matriz_costos_fijos["TIPO_VEHICULO"] == configuracion) &
-        (matriz_costos_fijos["MES"] == serie) &
-        (matriz_costos_fijos["TIPO_CARROCERIA"] == tipo_carroceria_objetivo)
-    ]
-    if not costo_fijo_match.empty:
-        costo_fijo_mes = costo_fijo_match["COSTO FIJO"].values[0]
-    else:
-        raise ValueError(f"No se encontró costo fijo para {configuracion} - {serie} - {tipo_carroceria_objetivo}")
-    costo_fijo_viaje = round(costo_fijo_mes / recorridos, 2)
+        matriz_costos_fijos['Concatenado'] == codigo_indice]
+    print(codigo_indice)
+    costo_fijo_mes = costo_fijo_match["COSTO FIJO"].values[0]
+    
+    if score < 80 :
+      logging.info(f"No se encontró costo fijo para la combinación {configuracion} - {serie} - {tipo_carroceria_objetivo}. Se toma la combinación {costo_fijo_match["TIPO_VEHICULO"]} - {costo_fijo_match["MES"]} - {costo_fijo_match["TIPO_carroceria"]} para el cálculo.")
+
+    costo_fijo_viaje = round(limpiar_valor_monetario(costo_fijo_mes) / recorridos, 2)
 
     # --- 6. Combustible ---
     valor_acpm = fila_param["VALOR COMBUSTIBLE GALÓN ACPM"]

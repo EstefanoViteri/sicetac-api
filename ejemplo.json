@@ -1,6 +1,7 @@
 {
     "origen": "Bogotá",
     "destino": "Medellín",
-    "vehiculo": "c3s3",
-    "mes": 202501
+    "vehiculo": "c3s2",
+    "mes": 202501,
+    "carroceria": "Volco"
 }
